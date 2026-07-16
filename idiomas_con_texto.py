@@ -217,6 +217,9 @@ class IdiomasConTextoApp:
         self.textos_guardados = cargar_guardados()
         self.ultimo_texto = ""
         self.traduciendo = False
+        self.traduccion_actual = ""
+        self.idioma_detectado_actual = ""
+        self.codigo_traduccion_destino = "es"
 
         self.build_ui()
         self.cargar_lista_guardados()
@@ -338,6 +341,18 @@ class IdiomasConTextoApp:
             highlightthickness=0, state=tk.DISABLED
         )
         self.resultado_text.pack(fill=tk.BOTH, expand=True)
+
+        audio_trad_row = tk.Frame(result_frame, bg=GRIS_FONDO)
+        audio_trad_row.pack(fill=tk.X, pady=(8, 0))
+
+        self.btn_escuchar_traduccion = tk.Button(
+            audio_trad_row, text="Escuchar Traduccion",
+            font=("Segoe UI", 10, "bold"), bg=AZUL_CLARO, fg=BLANCO,
+            activebackground=AZUL, activeforeground=BLANCO,
+            relief=tk.FLAT, padx=20, pady=7, cursor="hand2",
+            command=self.escuchar_traduccion
+        )
+        self.btn_escuchar_traduccion.pack(side=tk.LEFT)
 
     def build_idiomas_tab(self):
         parent = self.tab_idiomas
@@ -577,6 +592,7 @@ class IdiomasConTextoApp:
 
             self.traduccion_actual = traduccion
             self.idioma_detectado_actual = codigo_detectado
+            self.codigo_traduccion_destino = codigo_destino
 
             resultado = (
                 f"Idioma detectado: {nombre_idioma} ({codigo_detectado})\n"
@@ -637,11 +653,16 @@ class IdiomasConTextoApp:
             "cy", "xh", "yi", "yo", "zu"]:
             lang_code = "es"
 
+        self.btn_escuchar.original_text = "Escuchar"
         self.btn_escuchar.config(state=tk.DISABLED, text="Reproduciendo...")
         self.root.update()
-        threading.Thread(target=self._reproducir_audio, args=(texto, lang_code), daemon=True).start()
+        threading.Thread(
+            target=self._reproducir_audio,
+            args=(texto, lang_code, self.btn_escuchar),
+            daemon=True
+        ).start()
 
-    def _reproducir_audio(self, texto, lang_code):
+    def _reproducir_audio(self, texto, lang_code, btn_restore=None):
         try:
             tts = gTTS(text=texto, lang=lang_code, slow=False, tld="com")
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
@@ -652,7 +673,25 @@ class IdiomasConTextoApp:
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror("Error", f"No se pudo reproducir audio: {str(e)}"))
         finally:
-            self.root.after(0, lambda: self.btn_escuchar.config(state=tk.NORMAL, text="Escuchar"))
+            if btn_restore:
+                self.root.after(0, lambda b=btn_restore: b.config(state=tk.NORMAL, text=b.original_text))
+
+    def escuchar_traduccion(self):
+        texto = getattr(self, 'traduccion_actual', '')
+        if not texto or texto.startswith("[Error"):
+            messagebox.showwarning("Sin traduccion", "Primero traduce un texto.")
+            return
+
+        lang_code = getattr(self, 'codigo_traduccion_destino', 'es')
+
+        self.btn_escuchar_traduccion.original_text = "Escuchar Traduccion"
+        self.btn_escuchar_traduccion.config(state=tk.DISABLED, text="Reproduciendo...")
+        self.root.update()
+        threading.Thread(
+            target=self._reproducir_audio,
+            args=(texto, lang_code, self.btn_escuchar_traduccion),
+            daemon=True
+        ).start()
 
     def guardar_texto_actual(self):
         texto = self.texto_entrada.get("1.0", tk.END).strip()

@@ -429,6 +429,8 @@ class IdiomasConTextoApp:
             var.trace_add("write", lambda *a, n=nombre: self._filtrar_idiomas(n))
 
         self._filtrar_idiomas("Europa")
+        self._filtrar_idiomas("America")
+        self._filtrar_idiomas("Africa")
 
     def _filtrar_por_continente(self, continente):
         datos = {}

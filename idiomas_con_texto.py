@@ -232,6 +232,7 @@ class IdiomasConTextoApp:
         self.cargar_lista_guardados()
 
     def build_ui(self):
+        self.root.update_idletasks()
         header = tk.Frame(self.root, bg=AZUL, height=70)
         header.pack(fill=tk.X)
         header.pack_propagate(False)
@@ -429,15 +430,22 @@ class IdiomasConTextoApp:
             var.trace_add("write", lambda *a, n=nombre: self._filtrar_idiomas(n))
 
         self._filtrar_idiomas("Europa")
-        notebook.bind("<<NotebookTabChanged>>", self._on_tab_selected)
+        self._filtrar_idiomas("America")
+        self._filtrar_idiomas("Africa")
+        notebook.bind("<<NotebookTabChanged>>", self._on_idioma_tab_show)
 
-    def _on_tab_selected(self, event):
+    def _on_idioma_tab_show(self, event):
         nb = event.widget
-        tab_id = nb.index(nb.select())
-        nombre = ["Europa", "America", "Africa"][tab_id]
+        idx = nb.index(nb.select())
+        nombre = ["Europa", "America", "Africa"][idx]
         info = self.idiomas_canvas[nombre]
-        if not info["scroll_frame"].winfo_children():
-            self._filtrar_idiomas(nombre)
+        canvas = info["canvas"]
+        try:
+            bbox = canvas.bbox("all")
+            if bbox:
+                canvas.configure(scrollregion=bbox)
+        except:
+            pass
 
     def _filtrar_por_continente(self, continente):
         datos = {}

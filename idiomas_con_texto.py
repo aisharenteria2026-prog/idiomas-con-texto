@@ -428,10 +428,15 @@ class IdiomasConTextoApp:
 
             var.trace_add("write", lambda *a, n=nombre: self._filtrar_idiomas(n))
 
-        self.root.after(100, lambda: self._poblar_todos_idiomas())
+        self._filtrar_idiomas("Europa")
+        notebook.bind("<<NotebookTabChanged>>", self._on_tab_selected)
 
-    def _poblar_todos_idiomas(self):
-        for nombre in ["Europa", "America", "Africa"]:
+    def _on_tab_selected(self, event):
+        nb = event.widget
+        tab_id = nb.index(nb.select())
+        nombre = ["Europa", "America", "Africa"][tab_id]
+        info = self.idiomas_canvas[nombre]
+        if not info["scroll_frame"].winfo_children():
             self._filtrar_idiomas(nombre)
 
     def _filtrar_por_continente(self, continente):

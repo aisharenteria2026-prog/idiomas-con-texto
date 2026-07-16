@@ -3,24 +3,24 @@ from tkinter import scrolledtext, messagebox, ttk
 import json
 import os
 import threading
-import time
+import subprocess
+import tempfile
 from datetime import datetime
 
 from langdetect import detect, DetectorFactory, LangDetectException
 from deep_translator import GoogleTranslator
-import pyttsx3
 
 DetectorFactory.seed = 0
 
+NEGRO = "#000000"
 BLANCO = "#FFFFFF"
 AMARILLO = "#FFD700"
 AZUL = "#1E3A8A"
 AZUL_CLARO = "#3B82F6"
-AZUL_FONDO = "#EFF6FF"
-GRIS_TEXTO = "#333333"
 GRIS_CLARO = "#F0F4F8"
-VERDE = "#10B981"
+GRIS_FONDO = "#E8EDF2"
 ROJO = "#EF4444"
+VERDE = "#10B981"
 
 PAIS_CONTINENTE = {
     "af": {"nombre": "Afrikáans", "pais": "Sudáfrica", "continente": "África"},
@@ -169,12 +169,7 @@ IDIOMAS_TRADUCCION = {
     "vi": "Vietnamita", "yi": "Yidis", "yo": "Yoruba", "zu": "Zulú",
 }
 
-LENGUA_AFRICA = {k: v for k, v in PAIS_CONTINENTE.items() if v["continente"] == "África"}
-LENGUA_AMERICA = {k: v for k, v in PAIS_CONTINENTE.items() if v["continente"] == "América"}
-LENGUA_EUROPA = {k: v for k, v in PAIS_CONTINENTE.items() if v["continente"] == "Europa"}
-
 ARCHIVO_GUARDADOS = "textos_guardados.json"
-
 RUTA_BASE = os.path.dirname(os.path.abspath(__file__))
 RUTA_GUARDADOS = os.path.join(RUTA_BASE, ARCHIVO_GUARDADOS)
 
@@ -216,213 +211,315 @@ class IdiomasConTextoApp:
         self.root = root
         self.root.title("Idiomas con Texto")
         self.root.configure(bg=BLANCO)
-        self.root.geometry("900x750")
-        self.root.minsize(800, 650)
+        self.root.geometry("950x780")
+        self.root.minsize(850, 680)
 
-        self.tts_engine = None
         self.textos_guardados = cargar_guardados()
+        self.ultimo_texto = ""
+        self.traduciendo = False
 
-        self.setup_styles()
         self.build_ui()
         self.cargar_lista_guardados()
 
-    def setup_styles(self):
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("TFrame", background=BLANCO)
-        style.configure("TLabel", background=BLANCO, foreground=GRIS_TEXTO, font=("Segoe UI", 10))
-        style.configure("TButton", font=("Segoe UI", 10, "bold"), padding=8)
-        style.configure("TMenubutton", font=("Segoe UI", 10), padding=5)
-        style.map("TButton",
-                  background=[("active", AZUL_CLARO)],
-                  foreground=[("active", BLANCO)])
-
     def build_ui(self):
-        canvas = tk.Canvas(self.root, bg=AZUL, height=8, highlightthickness=0)
-        canvas.pack(fill=tk.X)
-
-        header_frame = tk.Frame(self.root, bg=AZUL, padx=20, pady=15)
-        header_frame.pack(fill=tk.X)
+        header = tk.Frame(self.root, bg=AZUL, height=70)
+        header.pack(fill=tk.X)
+        header.pack_propagate(False)
 
         tk.Label(
-            header_frame, text="🌍 Idiomas con Texto",
-            font=("Segoe UI", 22, "bold"), bg=AZUL, fg=BLANCO
-        ).pack()
+            header, text="Idiomas con Texto",
+            font=("Segoe UI", 20, "bold"), bg=AZUL, fg=BLANCO
+        ).place(relx=0.5, rely=0.5, anchor="center")
 
         tk.Label(
-            header_frame, text="Detecta, traduce y escucha cualquier idioma",
-            font=("Segoe UI", 11), bg=AZUL, fg=AMARILLO
-        ).pack(pady=(2, 0))
+            header, text="Detecta, traduce y escucha cualquier idioma",
+            font=("Segoe UI", 9), bg=AZUL, fg=AMARILLO
+        ).place(relx=0.5, rely=0.78, anchor="center")
 
-        main_container = tk.Frame(self.root, bg=BLANCO, padx=20, pady=15)
-        main_container.pack(fill=tk.BOTH, expand=True)
+        notebook = ttk.Notebook(self.root)
+        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        self.build_input_section(main_container)
-        self.build_control_section(main_container)
-        self.build_result_section(main_container)
-        self.build_saved_section(main_container)
+        self.tab_traductor = tk.Frame(notebook, bg=BLANCO)
+        self.tab_idiomas = tk.Frame(notebook, bg=BLANCO)
+        self.tab_guardados = tk.Frame(notebook, bg=BLANCO)
 
-    def build_input_section(self, parent):
+        notebook.add(self.tab_traductor, text="  Traductor  ")
+        notebook.add(self.tab_idiomas, text="  Idiomas por Continente  ")
+        notebook.add(self.tab_guardados, text="  Textos Guardados  ")
+
+        self.build_traductor_tab()
+        self.build_idiomas_tab()
+        self.build_guardados_tab()
+
+    def build_traductor_tab(self):
+        parent = self.tab_traductor
+
         input_frame = tk.Frame(parent, bg=BLANCO)
-        input_frame.pack(fill=tk.X, pady=(0, 10))
+        input_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(15, 5))
 
         tk.Label(
-            input_frame, text="✏️ Escribe o pega tu texto aquí:",
-            font=("Segoe UI", 11, "bold"), bg=BLANCO, fg=AZUL, anchor="w"
-        ).pack(fill=tk.X, pady=(0, 5))
+            input_frame, text="Escribe o pega tu texto:",
+            font=("Segoe UI", 11, "bold"), bg=BLANCO, fg=NEGRO, anchor="w"
+        ).pack(fill=tk.X)
 
-        text_frame = tk.Frame(input_frame, bg=AZUL, padx=2, pady=2)
-        text_frame.pack(fill=tk.X)
+        text_container = tk.Frame(input_frame, bg=AZUL, padx=2, pady=2)
+        text_container.pack(fill=tk.BOTH, expand=True, pady=(5, 0))
 
         self.texto_entrada = scrolledtext.ScrolledText(
-            text_frame, height=4, wrap=tk.WORD,
-            font=("Segoe UI", 11), bg=BLANCO, fg=GRIS_TEXTO,
+            text_container, height=5, wrap=tk.WORD,
+            font=("Segoe UI", 11), bg=BLANCO, fg=NEGRO,
             relief=tk.FLAT, bd=0, padx=10, pady=10,
             highlightthickness=0
         )
-        self.texto_entrada.pack(fill=tk.X)
-        self.texto_entrada.config(insertbackground=AZUL_CLARO)
+        self.texto_entrada.pack(fill=tk.BOTH, expand=True)
+        self.texto_entrada.config(insertbackground=NEGRO)
 
-        self.texto_entrada.bind("<KeyRelease>", self.on_text_change)
-
-    def build_control_section(self, parent):
-        control_frame = tk.Frame(parent, bg=BLANCO)
-        control_frame.pack(fill=tk.X, pady=(0, 12))
-
-        top_row = tk.Frame(control_frame, bg=BLANCO)
-        top_row.pack(fill=tk.X, pady=(0, 8))
+        lang_row = tk.Frame(parent, bg=BLANCO)
+        lang_row.pack(fill=tk.X, padx=15, pady=(8, 5))
 
         tk.Label(
-            top_row, text="Traducir a:",
-            font=("Segoe UI", 10, "bold"), bg=BLANCO, fg=AZUL
+            lang_row, text="Traducir a:",
+            font=("Segoe UI", 10, "bold"), bg=BLANCO, fg=NEGRO
         ).pack(side=tk.LEFT, padx=(0, 8))
 
         self.idioma_destino = tk.StringVar(value="es")
         self.combo_idiomas = ttk.Combobox(
-            top_row, textvariable=self.idioma_destino,
-            font=("Segoe UI", 10), state="readonly", width=30
+            lang_row, textvariable=self.idioma_destino,
+            font=("Segoe UI", 10), state="readonly", width=35
         )
-        idiomas_ordenados = sorted(IDIOMAS_TRADUCCION.items(), key=lambda x: x[1])
-        self.combo_idiomas["values"] = [f"{cod} - {nom}" for cod, nom in idiomas_ordenados]
+        items = sorted(IDIOMAS_TRADUCCION.items(), key=lambda x: x[1])
+        self.combo_idiomas["values"] = [f"{cod} - {nom}" for cod, nom in items]
         self.combo_idiomas.set("es - Español")
-        self.combo_idiomas.pack(side=tk.LEFT, padx=(0, 10))
+        self.combo_idiomas.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        self.combo_idiomas.bind("<<ComboboxSelected>>", self.on_idioma_cambiado)
 
-        btn_frame = tk.Frame(control_frame, bg=BLANCO)
-        btn_frame.pack(fill=tk.X)
+        btn_row = tk.Frame(parent, bg=BLANCO)
+        btn_row.pack(fill=tk.X, padx=15, pady=(5, 8))
 
-        btn_detectar = tk.Button(
-            btn_frame, text="🔍 Detectar y Traducir",
+        self.btn_traducir = tk.Button(
+            btn_row, text="Detectar y Traducir",
             font=("Segoe UI", 10, "bold"), bg=AZUL, fg=BLANCO,
             activebackground=AZUL_CLARO, activeforeground=BLANCO,
-            relief=tk.FLAT, padx=16, pady=8, cursor="hand2",
+            relief=tk.FLAT, padx=20, pady=8, cursor="hand2",
             command=self.detectar_y_traducir
         )
-        btn_detectar.pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_traducir.pack(side=tk.LEFT, padx=(0, 8))
 
-        btn_escuchar = tk.Button(
-            btn_frame, text="🔊 Escuchar",
-            font=("Segoe UI", 10, "bold"), bg=AMARILLO, fg=AZUL,
-            activebackground="#FFC000", activeforeground=AZUL,
-            relief=tk.FLAT, padx=16, pady=8, cursor="hand2",
+        self.btn_escuchar = tk.Button(
+            btn_row, text="Escuchar",
+            font=("Segoe UI", 10, "bold"), bg=AMARILLO, fg=NEGRO,
+            activebackground="#FFC000", activeforeground=NEGRO,
+            relief=tk.FLAT, padx=20, pady=8, cursor="hand2",
             command=self.escuchar_texto
         )
-        btn_escuchar.pack(side=tk.LEFT, padx=(0, 8))
-
-        btn_idiomas = tk.Button(
-            btn_frame, text="🌐 Ver Idiomas",
-            font=("Segoe UI", 10, "bold"), bg=AZUL_CLARO, fg=BLANCO,
-            activebackground=AZUL, activeforeground=BLANCO,
-            relief=tk.FLAT, padx=16, pady=8, cursor="hand2",
-            command=self.mostrar_idiomas_continentes
-        )
-        btn_idiomas.pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_escuchar.pack(side=tk.LEFT, padx=(0, 8))
 
         btn_guardar = tk.Button(
-            btn_frame, text="💾 Guardar Texto",
+            btn_row, text="Guardar Texto",
             font=("Segoe UI", 10, "bold"), bg=VERDE, fg=BLANCO,
             activebackground="#059669", activeforeground=BLANCO,
-            relief=tk.FLAT, padx=16, pady=8, cursor="hand2",
+            relief=tk.FLAT, padx=20, pady=8, cursor="hand2",
             command=self.guardar_texto_actual
         )
         btn_guardar.pack(side=tk.LEFT)
 
-    def build_result_section(self, parent):
-        result_frame = tk.Frame(parent, bg=GRIS_CLARO, padx=15, pady=12, relief=tk.FLAT)
-        result_frame.pack(fill=tk.X, pady=(0, 12))
+        result_frame = tk.Frame(parent, bg=GRIS_FONDO, padx=15, pady=12)
+        result_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
 
         tk.Label(
-            result_frame, text="📋 Resultado:",
-            font=("Segoe UI", 11, "bold"), bg=GRIS_CLARO, fg=AZUL, anchor="w"
-        ).pack(fill=tk.X, pady=(0, 8))
+            result_frame, text="Resultado:",
+            font=("Segoe UI", 11, "bold"), bg=GRIS_FONDO, fg=NEGRO, anchor="w"
+        ).pack(fill=tk.X, pady=(0, 5))
 
         self.resultado_text = tk.Text(
-            result_frame, height=5, wrap=tk.WORD,
-            font=("Segoe UI", 10), bg=BLANCO, fg=GRIS_TEXTO,
+            result_frame, height=6, wrap=tk.WORD,
+            font=("Segoe UI", 10), bg=BLANCO, fg=NEGRO,
             relief=tk.SOLID, bd=1, padx=10, pady=10,
             highlightthickness=0, state=tk.DISABLED
         )
-        self.resultado_text.pack(fill=tk.X)
+        self.resultado_text.pack(fill=tk.BOTH, expand=True)
 
-    def build_saved_section(self, parent):
-        saved_frame = tk.Frame(parent, bg=BLANCO)
-        saved_frame.pack(fill=tk.BOTH, expand=True)
-
-        header_saved = tk.Frame(saved_frame, bg=BLANCO)
-        header_saved.pack(fill=tk.X, pady=(0, 5))
+    def build_idiomas_tab(self):
+        parent = self.tab_idiomas
 
         tk.Label(
-            header_saved, text="📚 Textos Guardados",
-            font=("Segoe UI", 11, "bold"), bg=BLANCO, fg=AZUL
-        ).pack(side=tk.LEFT)
+            parent, text="Selecciona un continente para ver sus idiomas:",
+            font=("Segoe UI", 11, "bold"), bg=BLANCO, fg=NEGRO, pady=10
+        ).pack()
+
+        notebook = ttk.Notebook(parent)
+        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+
+        continentes = {
+            "Europa": lambda: self._filtrar_por_continente("Europa"),
+            "America": lambda: self._filtrar_por_continente("América"),
+            "Africa": lambda: self._filtrar_por_continente("África"),
+        }
+
+        self.idiomas_canvas = {}
+
+        for nombre, _ in continentes.items():
+            frame = tk.Frame(notebook, bg=BLANCO)
+            notebook.add(frame, text=f"  {nombre}  ")
+
+            search_frame = tk.Frame(frame, bg=BLANCO)
+            search_frame.pack(fill=tk.X, padx=10, pady=8)
+
+            tk.Label(search_frame, text="Buscar:", bg=BLANCO, fg=NEGRO,
+                     font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(0, 5))
+
+            var = tk.StringVar()
+            entry = tk.Entry(search_frame, textvariable=var,
+                             font=("Segoe UI", 10), relief=tk.SOLID, bd=1)
+            entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+            list_container = tk.Frame(frame, bg=BLANCO)
+            list_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+
+            canvas = tk.Canvas(list_container, bg=BLANCO, highlightthickness=0)
+            scrollbar = tk.Scrollbar(list_container, orient=tk.VERTICAL, command=canvas.yview)
+            scroll_frame = tk.Frame(canvas, bg=BLANCO)
+
+            scroll_frame.bind("<Configure>",
+                              lambda e, c=canvas: c.configure(scrollregion=c.bbox("all")))
+            canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+
+            canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+            def make_scroll(c=canvas):
+                def scroll_handler(event):
+                    c.yview_scroll(int(-1 * (event.delta / 120)), "units")
+                return scroll_handler
+
+            canvas.bind("<Enter>", lambda e, c=canvas: c.bind_all("<MouseWheel>", make_scroll(c)))
+            canvas.bind("<Leave>", lambda e, c=canvas: c.unbind_all("<MouseWheel>"))
+
+            self.idiomas_canvas[nombre] = {
+                "canvas": canvas,
+                "scroll_frame": scroll_frame,
+                "search_var": var,
+                "search_entry": entry,
+                "continente_nombre": {"Europa": "Europa", "America": "América", "Africa": "África"}[nombre]
+            }
+
+            var.trace_add("write", lambda *a, n=nombre: self._filtrar_idiomas(n))
+
+        self._filtrar_idiomas("Europa")
+
+    def _filtrar_por_continente(self, continente):
+        datos = {}
+        for k, v in PAIS_CONTINENTE.items():
+            if v["continente"] == continente:
+                datos[k] = v
+        return datos
+
+    def _filtrar_idiomas(self, nombre_tab):
+        info = self.idiomas_canvas[nombre_tab]
+        canvas = info["canvas"]
+        scroll_frame = info["scroll_frame"]
+        busqueda = info["search_var"].get().lower().strip()
+        continente = info["continente_nombre"]
+
+        for w in scroll_frame.winfo_children():
+            w.destroy()
+
+        datos = self._filtrar_por_continente(continente)
+        items = sorted(datos.items(), key=lambda x: x[1]["nombre"])
+
+        if busqueda:
+            items = [(k, v) for k, v in items
+                     if busqueda in v["nombre"].lower()
+                     or busqueda in v["pais"].lower()
+                     or busqueda in k.lower()]
+
+        if not items:
+            tk.Label(scroll_frame, text="No se encontraron idiomas.",
+                     font=("Segoe UI", 10), bg=BLANCO, fg=NEGRO, pady=20).pack()
+            return
+
+        for i, (codigo, info_idioma) in enumerate(items):
+            bg = BLANCO if i % 2 == 0 else GRIS_CLARO
+            row = tk.Frame(scroll_frame, bg=bg, padx=10, pady=3)
+            row.pack(fill=tk.X)
+
+            tk.Label(row, text=info_idioma["nombre"],
+                     font=("Segoe UI", 10, "bold"), bg=bg, fg=NEGRO,
+                     width=28, anchor="w").pack(side=tk.LEFT)
+
+            tk.Label(row, text=f"({codigo})",
+                     font=("Segoe UI", 9), bg=bg, fg=NEGRO,
+                     width=10, anchor="w").pack(side=tk.LEFT)
+
+            tk.Label(row, text=f"{info_idioma['pais']}",
+                     font=("Segoe UI", 9), bg=bg, fg=NEGRO,
+                     anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        canvas.configure(scrollregion=canvas.bbox("all"))
+
+    def build_guardados_tab(self):
+        parent = self.tab_guardados
+
+        header = tk.Frame(parent, bg=BLANCO)
+        header.pack(fill=tk.X, padx=15, pady=(15, 5))
+
+        tk.Label(header, text="Textos Guardados",
+                 font=("Segoe UI", 13, "bold"), bg=BLANCO, fg=NEGRO).pack(side=tk.LEFT)
 
         btn_limpiar = tk.Button(
-            header_saved, text="🗑️ Limpiar Todo",
+            header, text="Limpiar Todo",
             font=("Segoe UI", 9), bg=ROJO, fg=BLANCO,
             activebackground="#DC2626", activeforeground=BLANCO,
-            relief=tk.FLAT, padx=10, pady=2, cursor="hand2",
+            relief=tk.FLAT, padx=12, pady=4, cursor="hand2",
             command=self.limpiar_guardados
         )
         btn_limpiar.pack(side=tk.RIGHT)
 
-        list_frame = tk.Frame(saved_frame, bg=AZUL, padx=2, pady=2)
-        list_frame.pack(fill=tk.BOTH, expand=True)
+        list_container = tk.Frame(parent, bg=AZUL, padx=2, pady=2)
+        list_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=(5, 8))
 
         self.lista_guardados = tk.Listbox(
-            list_frame, font=("Segoe UI", 9), bg=BLANCO, fg=GRIS_TEXTO,
+            list_container, font=("Segoe UI", 10), bg=BLANCO, fg=NEGRO,
             relief=tk.FLAT, bd=0,
-            selectbackground=AZUL_CLARO, selectforeground=BLANCO,
-            height=4
+            selectbackground=AZUL_CLARO, selectforeground=BLANCO
         )
-        scrollbar = tk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.lista_guardados.yview)
+        scrollbar = tk.Scrollbar(list_container, orient=tk.VERTICAL,
+                                 command=self.lista_guardados.yview)
         self.lista_guardados.config(yscrollcommand=scrollbar.set)
         self.lista_guardados.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
         self.lista_guardados.bind("<Double-Button-1>", self.cargar_guardado_seleccionado)
 
-        btn_frame = tk.Frame(saved_frame, bg=BLANCO)
-        btn_frame.pack(fill=tk.X, pady=(5, 0))
-
-        btn_eliminar = tk.Button(
-            btn_frame, text="❌ Eliminar Seleccionado",
-            font=("Segoe UI", 9), bg=ROJO, fg=BLANCO,
-            activebackground="#DC2626", activeforeground=BLANCO,
-            relief=tk.FLAT, padx=12, pady=4, cursor="hand2",
-            command=self.eliminar_guardado
-        )
-        btn_eliminar.pack(side=tk.LEFT, padx=(0, 8))
+        btn_frame = tk.Frame(parent, bg=BLANCO)
+        btn_frame.pack(fill=tk.X, padx=15, pady=(0, 15))
 
         btn_cargar = tk.Button(
-            btn_frame, text="📂 Cargar en Editor",
-            font=("Segoe UI", 9), bg=AZUL, fg=BLANCO,
+            btn_frame, text="Cargar en Editor",
+            font=("Segoe UI", 10, "bold"), bg=AZUL, fg=BLANCO,
             activebackground=AZUL_CLARO, activeforeground=BLANCO,
-            relief=tk.FLAT, padx=12, pady=4, cursor="hand2",
-            command=self.cargar_guardado_seleccionado
+            relief=tk.FLAT, padx=16, pady=6, cursor="hand2",
+            command=lambda: self.cargar_guardado_seleccionado()
         )
-        btn_cargar.pack(side=tk.LEFT)
+        btn_cargar.pack(side=tk.LEFT, padx=(0, 8))
 
-    def on_text_change(self, event=None):
-        pass
+        btn_eliminar = tk.Button(
+            btn_frame, text="Eliminar Seleccionado",
+            font=("Segoe UI", 10, "bold"), bg=ROJO, fg=BLANCO,
+            activebackground="#DC2626", activeforeground=BLANCO,
+            relief=tk.FLAT, padx=16, pady=6, cursor="hand2",
+            command=self.eliminar_guardado
+        )
+        btn_eliminar.pack(side=tk.LEFT)
+
+        status_frame = tk.Frame(parent, bg=GRIS_FONDO)
+        status_frame.pack(fill=tk.X, padx=15, pady=(0, 15))
+
+        self.status_guardados = tk.Label(
+            status_frame, text="", font=("Segoe UI", 9),
+            bg=GRIS_FONDO, fg=NEGRO, anchor="w", padx=10, pady=6
+        )
+        self.status_guardados.pack(fill=tk.X)
 
     def obtener_codigo_idioma(self):
         seleccion = self.combo_idiomas.get()
@@ -430,15 +527,26 @@ class IdiomasConTextoApp:
             return seleccion.split(" - ")[0].strip()
         return "es"
 
+    def on_idioma_cambiado(self, event=None):
+        texto = self.texto_entrada.get("1.0", tk.END).strip()
+        if texto:
+            self.detectar_y_traducir()
+
     def detectar_y_traducir(self):
         texto = self.texto_entrada.get("1.0", tk.END).strip()
         if not texto:
-            messagebox.showwarning("Texto vacío", "Por favor, escribe o pega un texto primero.")
+            messagebox.showwarning("Texto vacio", "Escribe o pega un texto primero.")
             return
+
+        if self.traduciendo:
+            return
+
+        self.traduciendo = True
+        self.btn_traducir.config(state=tk.DISABLED, text="Traduciendo...")
 
         self.resultado_text.config(state=tk.NORMAL)
         self.resultado_text.delete("1.0", tk.END)
-        self.resultado_text.insert("1.0", "⏳ Procesando...\n")
+        self.resultado_text.insert("1.0", "Procesando...")
         self.resultado_text.config(state=tk.DISABLED)
         self.root.update()
 
@@ -456,25 +564,26 @@ class IdiomasConTextoApp:
             codigo_destino = self.obtener_codigo_idioma()
             nombre_destino = IDIOMAS_TRADUCCION.get(codigo_destino, codigo_destino)
 
+            traduccion = ""
             try:
-                traductor = GoogleTranslator(source=codigo_detectado, target=codigo_destino)
+                traductor = GoogleTranslator(source="auto", target=codigo_destino)
                 traduccion = traductor.translate(texto)
-            except Exception:
+            except Exception as e:
                 try:
-                    traductor = GoogleTranslator(source="auto", target=codigo_destino)
+                    traductor = GoogleTranslator(source=codigo_detectado, target=codigo_destino)
                     traduccion = traductor.translate(texto)
-                except Exception as e:
-                    traduccion = f"[Error al traducir: {str(e)}]"
+                except Exception as e2:
+                    traduccion = f"[Error al traducir]"
 
             self.traduccion_actual = traduccion
             self.idioma_detectado_actual = codigo_detectado
 
             resultado = (
-                f"🌐 Idioma detectado: {nombre_idioma} ({codigo_detectado})\n"
-                f"📍 País: {pais}\n"
-                f"🗺️ Continente: {continente}\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🔤 Traducción al {nombre_destino}:\n"
+                f"Idioma detectado: {nombre_idioma} ({codigo_detectado})\n"
+                f"Pais: {pais}\n"
+                f"Continente: {continente}\n"
+                f"----------------------------------------\n"
+                f"Traduccion al {nombre_destino}:\n"
                 f"{traduccion}"
             )
 
@@ -485,6 +594,12 @@ class IdiomasConTextoApp:
                           "No se pudo detectar el idioma. El texto es muy corto o contiene caracteres no reconocidos.")
         except Exception as e:
             self.root.after(0, self._mostrar_error, f"Error: {str(e)}")
+        finally:
+            self.root.after(0, self._habilitar_boton)
+
+    def _habilitar_boton(self):
+        self.traduciendo = False
+        self.btn_traducir.config(state=tk.NORMAL, text="Detectar y Traducir")
 
     def _mostrar_resultado(self, texto):
         self.resultado_text.config(state=tk.NORMAL)
@@ -495,160 +610,96 @@ class IdiomasConTextoApp:
     def _mostrar_error(self, mensaje):
         self.resultado_text.config(state=tk.NORMAL)
         self.resultado_text.delete("1.0", tk.END)
-        self.resultado_text.insert("1.0", f"❌ {mensaje}")
+        self.resultado_text.insert("1.0", mensaje)
         self.resultado_text.config(state=tk.DISABLED)
 
     def escuchar_texto(self):
         texto = self.texto_entrada.get("1.0", tk.END).strip()
         if not texto:
-            messagebox.showwarning("Texto vacío", "No hay texto para escuchar.")
+            messagebox.showwarning("Texto vacio", "No hay texto para escuchar.")
             return
 
+        self.btn_escuchar.config(state=tk.DISABLED, text="Reproduciendo...")
+        self.root.update()
         threading.Thread(target=self._reproducir_audio, args=(texto,), daemon=True).start()
 
     def _reproducir_audio(self, texto):
         try:
-            if self.tts_engine is None:
-                self.tts_engine = pyttsx3.init()
+            temp_file = tempfile.NamedTemporaryFile(suffix=".aiff", delete=False)
+            temp_file.close()
 
-            voices = self.tts_engine.getProperty("voices")
-            voz_seleccionada = None
-            for v in voices:
-                if "daniel" in v.id.lower():
-                    voz_seleccionada = v.id
-                    break
-            if voz_seleccionada is None:
-                for v in voices:
-                    if "male" in v.gender.lower() or "fred" in v.id.lower() or "thomas" in v.id.lower():
-                        voz_seleccionada = v.id
-                        break
-            if voz_seleccionada is None and voices:
-                voz_seleccionada = voices[0].id
+            voice = "Daniel"
+            subprocess.run(
+                ["say", "-v", voice, "-o", temp_file.name, texto],
+                capture_output=True, check=True
+            )
+            subprocess.run(
+                ["afplay", temp_file.name],
+                capture_output=True, check=True
+            )
+            os.unlink(temp_file.name)
 
-            if voz_seleccionada:
-                self.tts_engine.setProperty("voice", voz_seleccionada)
-
-            self.tts_engine.setProperty("rate", 165)
-            self.tts_engine.setProperty("volume", 0.9)
-
-            self.tts_engine.say(texto)
-            self.tts_engine.runAndWait()
-
+        except subprocess.CalledProcessError:
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".aiff", delete=False) as f:
+                    pass
+                subprocess.run(["say", "-o", f.name, texto], capture_output=True, check=True)
+                subprocess.run(["afplay", f.name], capture_output=True, check=True)
+                os.unlink(f.name)
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("Error", f"No se pudo reproducir audio: {str(e)}"))
         except Exception as e:
-            self.root.after(0, lambda: messagebox.showerror("Error", f"No se pudo reproducir el audio:\n{str(e)}"))
-
-    def mostrar_idiomas_continentes(self):
-        ventana = tk.Toplevel(self.root)
-        ventana.title("Idiomas por Continente")
-        ventana.configure(bg=BLANCO)
-        ventana.geometry("700x550")
-        ventana.minsize(600, 400)
-        ventana.transient(self.root)
-
-        tk.Label(
-            ventana, text="🌐 Idiomas por Continente",
-            font=("Segoe UI", 16, "bold"), bg=AZUL, fg=BLANCO, pady=12
-        ).pack(fill=tk.X)
-
-        notebook = ttk.Notebook(ventana)
-        notebook.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
-
-        for continente, datos_continente, color in [
-            ("🌍 Europa", LENGUA_EUROPA, AZUL),
-            ("🌍 América", LENGUA_AMERICA, VERDE),
-            ("🌍 África", LENGUA_AFRICA, AMARILLO),
-        ]:
-            frame = tk.Frame(notebook, bg=BLANCO)
-            notebook.add(frame, text=continente)
-
-            canvas = tk.Canvas(frame, bg=BLANCO, highlightthickness=0)
-            scrollbar = tk.Scrollbar(frame, orient=tk.VERTICAL, command=canvas.yview)
-            scroll_frame = tk.Frame(canvas, bg=BLANCO)
-
-            scroll_frame.bind("<Configure>", lambda e, c=canvas: c.configure(scrollregion=c.bbox("all")))
-            canvas.create_window((0, 0), window=scroll_frame, anchor="nw", width=650)
-            canvas.configure(yscrollcommand=scrollbar.set)
-
-            canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-            def on_mousewheel(event, c=canvas):
-                c.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-            canvas.bind_all("<MouseWheel>", on_mousewheel)
-
-            idiomas_ordenados = sorted(datos_continente.items(), key=lambda x: x[1]["nombre"])
-
-            for i, (codigo, info) in enumerate(idiomas_ordenados):
-                bg_item = BLANCO if i % 2 == 0 else GRIS_CLARO
-                item_frame = tk.Frame(scroll_frame, bg=bg_item, padx=10, pady=4)
-                item_frame.pack(fill=tk.X)
-
-                tk.Label(
-                    item_frame, text=f"{info['nombre']}",
-                    font=("Segoe UI", 10, "bold"), bg=bg_item, fg=AZUL, width=25, anchor="w"
-                ).pack(side=tk.LEFT)
-
-                tk.Label(
-                    item_frame, text=f"({codigo})",
-                    font=("Segoe UI", 9), bg=bg_item, fg=GRIS_TEXTO, width=10, anchor="w"
-                ).pack(side=tk.LEFT)
-
-                tk.Label(
-                    item_frame, text=f"📍 {info['pais']}",
-                    font=("Segoe UI", 9), bg=bg_item, fg=GRIS_TEXTO, anchor="w"
-                ).pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-            if not idiomas_ordenados:
-                tk.Label(
-                    scroll_frame, text="No hay idiomas registrados para este continente.",
-                    font=("Segoe UI", 10), bg=BLANCO, fg=GRIS_TEXTO, pady=30
-                ).pack()
-
-            def cleanup(event, c=canvas):
-                c.unbind_all("<MouseWheel>")
-
-            ventana.protocol("WM_DELETE_WINDOW", lambda: (cleanup(None, canvas), ventana.destroy()))
+            self.root.after(0, lambda: messagebox.showerror("Error", f"No se pudo reproducir audio: {str(e)}"))
+        finally:
+            self.root.after(0, lambda: self.btn_escuchar.config(state=tk.NORMAL, text="Escuchar"))
 
     def guardar_texto_actual(self):
         texto = self.texto_entrada.get("1.0", tk.END).strip()
         if not texto:
-            messagebox.showwarning("Texto vacío", "No hay texto para guardar.")
+            messagebox.showwarning("Texto vacio", "No hay texto para guardar.")
             return
 
         idioma_info = "Desconocido"
         traduccion_info = ""
 
-        contenido_resultado = self.resultado_text.get("1.0", tk.END).strip()
-        if contenido_resultado and "Idioma detectado" in contenido_resultado:
-            lineas = contenido_resultado.split("\n")
-            for linea in lineas:
-                if "Idioma detectado" in linea:
-                    idioma_info = linea.split(":")[1].strip()
-                if "Traducción al" in linea or "━━━━" in lineas:
-                    pass
+        contenido = self.resultado_text.get("1.0", tk.END).strip()
+        if contenido and "Idioma detectado" in contenido:
+            lineas = contenido.split("\n")
+            if lineas:
+                primera = lineas[0]
+                if ":" in primera:
+                    idioma_info = primera.split(":", 1)[1].strip()
 
-            idx_traduccion = -1
+            idx_trad = -1
             for i, linea in enumerate(lineas):
-                if linea.startswith("🔤"):
-                    idx_traduccion = i + 1
+                if linea.startswith("Traduccion al"):
+                    idx_trad = i + 1
                     break
-            if idx_traduccion > 0 and idx_traduccion < len(lineas):
-                traduccion_info = "\n".join(lineas[idx_traduccion:])
+            if idx_trad > 0 and idx_trad < len(lineas):
+                traduccion_info = "\n".join(lineas[idx_trad:])
 
         self.textos_guardados = guardar_texto_json(texto, idioma_info, traduccion_info)
         self.cargar_lista_guardados()
+
+        tab_guardados = self.root.nametowidget(self.root.winfo_children()[1]).tabs()
+        self.root.nametowidget(self.root.winfo_children()[1]).select(len(tab_guardados) - 1)
+
         messagebox.showinfo("Guardado", "Texto guardado exitosamente.")
 
     def cargar_lista_guardados(self):
         self.lista_guardados.delete(0, tk.END)
         self.textos_guardados = cargar_guardados()
         for item in self.textos_guardados:
-            texto_preview = item["texto"][:60] + "..." if len(item["texto"]) > 60 else item["texto"]
+            preview = item["texto"][:65] + "..." if len(item["texto"]) > 65 else item["texto"]
             self.lista_guardados.insert(
                 tk.END,
-                f"[{item.get('fecha', '')}] {item.get('idioma', '?')}: {texto_preview}"
+                f"[{item.get('fecha', '')}] {item.get('idioma', '?')}: {preview}"
             )
+
+        if self.textos_guardados:
+            self.status_guardados.config(text=f"Total: {len(self.textos_guardados)} texto(s) guardado(s)")
+        else:
+            self.status_guardados.config(text="No hay textos guardados todavia.")
 
     def cargar_guardado_seleccionado(self, event=None):
         seleccion = self.lista_guardados.curselection()
@@ -666,10 +717,15 @@ class IdiomasConTextoApp:
                 self.resultado_text.config(state=tk.NORMAL)
                 self.resultado_text.delete("1.0", tk.END)
                 self.resultado_text.insert("1.0",
-                    f"🌐 Idioma detectado: {item.get('idioma', 'Desconocido')}\n"
-                    f"🔤 Traducción:\n{item['traduccion']}"
+                    f"Idioma detectado: {item.get('idioma', 'Desconocido')}\n"
+                    f"Traduccion:\n{item['traduccion']}"
                 )
                 self.resultado_text.config(state=tk.DISABLED)
+
+            notebook = self.root.nametowidget(self.root.winfo_children()[1])
+            notebook.select(0)
+
+            messagebox.showinfo("Cargado", "Texto cargado en el editor.")
 
     def eliminar_guardado(self):
         seleccion = self.lista_guardados.curselection()
@@ -677,14 +733,14 @@ class IdiomasConTextoApp:
             messagebox.showinfo("Seleccionar", "Selecciona un texto para eliminar.")
             return
 
-        if messagebox.askyesno("Confirmar", "¿Eliminar este texto guardado?"):
+        if messagebox.askyesno("Confirmar", "Eliminar este texto guardado?"):
             self.textos_guardados = eliminar_guardado_json(seleccion[0])
             self.cargar_lista_guardados()
 
     def limpiar_guardados(self):
         if not self.textos_guardados:
             return
-        if messagebox.askyesno("Confirmar", "¿Eliminar todos los textos guardados?"):
+        if messagebox.askyesno("Confirmar", "Eliminar todos los textos guardados?"):
             with open(RUTA_GUARDADOS, "w", encoding="utf-8") as f:
                 json.dump([], f)
             self.textos_guardados = []

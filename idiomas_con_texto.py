@@ -428,14 +428,11 @@ class IdiomasConTextoApp:
 
             var.trace_add("write", lambda *a, n=nombre: self._filtrar_idiomas(n))
 
-        self._filtrar_idiomas("Europa")
-        notebook.bind("<<NotebookTabChanged>>", lambda e: self._on_idiomas_tab_change(e, notebook))
+        self.root.after(100, lambda: self._poblar_todos_idiomas())
 
-    def _on_idiomas_tab_change(self, event, notebook):
-        idx = notebook.index(notebook.select())
-        tabs = ["Europa", "America", "Africa"]
-        nombre = tabs[idx]
-        self._filtrar_idiomas(nombre)
+    def _poblar_todos_idiomas(self):
+        for nombre in ["Europa", "America", "Africa"]:
+            self._filtrar_idiomas(nombre)
 
     def _filtrar_por_continente(self, continente):
         datos = {}
@@ -494,7 +491,12 @@ class IdiomasConTextoApp:
                      font=("Segoe UI", 9), bg=bg, fg=NEGRO,
                      anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        canvas.configure(scrollregion=canvas.bbox("all"))
+        try:
+            bbox = canvas.bbox("all")
+            if bbox:
+                canvas.configure(scrollregion=bbox)
+        except:
+            pass
 
     def build_guardados_tab(self):
         parent = self.tab_guardados

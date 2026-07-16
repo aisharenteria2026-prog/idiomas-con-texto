@@ -629,29 +629,25 @@ class IdiomasConTextoApp:
         self.resultado_text.insert("1.0", mensaje)
         self.resultado_text.config(state=tk.DISABLED)
 
+    def _lang_to_gtts(self, code):
+        mapa = {
+            "zh-cn": "zh-CN", "zh-tw": "zh-TW",
+            "jv": "jw", "he": "iw",
+            "fr-ca": "fr-CA", "pt-pt": "pt-PT",
+            "nb": "no", "jw": "jw",
+        }
+        return mapa.get(code, code)
+
     def escuchar_texto(self):
         texto = self.texto_entrada.get("1.0", tk.END).strip()
         if not texto:
             messagebox.showwarning("Texto vacio", "No hay texto para escuchar.")
             return
 
-        lang_code = "es"
         try:
-            lang_code = detect(texto)
+            lang_code = self._lang_to_gtts(detect(texto))
         except:
-            pass
-
-        if lang_code not in ["af", "sq", "am", "ar", "hy", "az", "eu", "be", "bn",
-            "bs", "bg", "my", "ca", "ceb", "ny", "zh-cn", "zh-tw", "si", "co", "hr",
-            "cs", "da", "nl", "en", "eo", "et", "tl", "fi", "fr", "fy", "gl", "ka",
-            "de", "el", "gu", "ht", "ha", "haw", "iw", "hi", "hmn", "hu", "is", "ig",
-            "id", "ga", "it", "ja", "jw", "kn", "kk", "km", "ko", "ku", "ky", "lo",
-            "la", "lv", "lt", "lb", "mk", "mg", "ms", "ml", "mt", "mi", "mr", "mn",
-            "ne", "no", "or", "ps", "fa", "pl", "pt", "pa", "ro", "ru", "sm", "gd",
-            "sr", "st", "sn", "sd", "si", "sk", "sl", "so", "es", "su", "sw", "sv",
-            "tg", "ta", "tt", "te", "th", "tr", "tk", "uk", "ur", "ug", "uz", "vi",
-            "cy", "xh", "yi", "yo", "zu"]:
-            lang_code = "es"
+            lang_code = "en"
 
         self.btn_escuchar.original_text = "Escuchar"
         self.btn_escuchar.config(state=tk.DISABLED, text="Reproduciendo...")
@@ -670,8 +666,16 @@ class IdiomasConTextoApp:
             tts.save(temp_path)
             os.system(f"afplay {temp_path} &>/dev/null")
             os.unlink(temp_path)
-        except Exception as e:
-            self.root.after(0, lambda: messagebox.showerror("Error", f"No se pudo reproducir audio: {str(e)}"))
+        except Exception:
+            try:
+                tts = gTTS(text=texto, lang="en", slow=False)
+                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                    temp_path = f.name
+                tts.save(temp_path)
+                os.system(f"afplay {temp_path} &>/dev/null")
+                os.unlink(temp_path)
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("Error", f"No se pudo reproducir audio: {str(e)}"))
         finally:
             if btn_restore:
                 self.root.after(0, lambda b=btn_restore: b.config(state=tk.NORMAL, text=b.original_text))
@@ -682,7 +686,7 @@ class IdiomasConTextoApp:
             messagebox.showwarning("Sin traduccion", "Primero traduce un texto.")
             return
 
-        lang_code = getattr(self, 'codigo_traduccion_destino', 'es')
+        lang_code = self._lang_to_gtts(getattr(self, 'codigo_traduccion_destino', 'en'))
 
         self.btn_escuchar_traduccion.original_text = "Escuchar Traduccion"
         self.btn_escuchar_traduccion.config(state=tk.DISABLED, text="Reproduciendo...")

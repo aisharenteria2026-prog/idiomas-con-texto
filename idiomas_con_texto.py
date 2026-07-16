@@ -3,12 +3,12 @@ from tkinter import scrolledtext, messagebox, ttk
 import json
 import os
 import threading
-import subprocess
 import tempfile
 from datetime import datetime
 
 from langdetect import detect, DetectorFactory, LangDetectException
 from deep_translator import GoogleTranslator
+from gtts import gTTS
 
 DetectorFactory.seed = 0
 
@@ -619,35 +619,36 @@ class IdiomasConTextoApp:
             messagebox.showwarning("Texto vacio", "No hay texto para escuchar.")
             return
 
+        lang_code = "es"
+        try:
+            lang_code = detect(texto)
+        except:
+            pass
+
+        if lang_code not in ["af", "sq", "am", "ar", "hy", "az", "eu", "be", "bn",
+            "bs", "bg", "my", "ca", "ceb", "ny", "zh-cn", "zh-tw", "si", "co", "hr",
+            "cs", "da", "nl", "en", "eo", "et", "tl", "fi", "fr", "fy", "gl", "ka",
+            "de", "el", "gu", "ht", "ha", "haw", "iw", "hi", "hmn", "hu", "is", "ig",
+            "id", "ga", "it", "ja", "jw", "kn", "kk", "km", "ko", "ku", "ky", "lo",
+            "la", "lv", "lt", "lb", "mk", "mg", "ms", "ml", "mt", "mi", "mr", "mn",
+            "ne", "no", "or", "ps", "fa", "pl", "pt", "pa", "ro", "ru", "sm", "gd",
+            "sr", "st", "sn", "sd", "si", "sk", "sl", "so", "es", "su", "sw", "sv",
+            "tg", "ta", "tt", "te", "th", "tr", "tk", "uk", "ur", "ug", "uz", "vi",
+            "cy", "xh", "yi", "yo", "zu"]:
+            lang_code = "es"
+
         self.btn_escuchar.config(state=tk.DISABLED, text="Reproduciendo...")
         self.root.update()
-        threading.Thread(target=self._reproducir_audio, args=(texto,), daemon=True).start()
+        threading.Thread(target=self._reproducir_audio, args=(texto, lang_code), daemon=True).start()
 
-    def _reproducir_audio(self, texto):
+    def _reproducir_audio(self, texto, lang_code):
         try:
-            temp_file = tempfile.NamedTemporaryFile(suffix=".aiff", delete=False)
-            temp_file.close()
-
-            voice = "Daniel"
-            subprocess.run(
-                ["say", "-v", voice, "-o", temp_file.name, texto],
-                capture_output=True, check=True
-            )
-            subprocess.run(
-                ["afplay", temp_file.name],
-                capture_output=True, check=True
-            )
-            os.unlink(temp_file.name)
-
-        except subprocess.CalledProcessError:
-            try:
-                with tempfile.NamedTemporaryFile(suffix=".aiff", delete=False) as f:
-                    pass
-                subprocess.run(["say", "-o", f.name, texto], capture_output=True, check=True)
-                subprocess.run(["afplay", f.name], capture_output=True, check=True)
-                os.unlink(f.name)
-            except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("Error", f"No se pudo reproducir audio: {str(e)}"))
+            tts = gTTS(text=texto, lang=lang_code, slow=False, tld="com")
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                temp_path = f.name
+            tts.save(temp_path)
+            os.system(f"afplay {temp_path} &>/dev/null")
+            os.unlink(temp_path)
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror("Error", f"No se pudo reproducir audio: {str(e)}"))
         finally:

@@ -429,8 +429,13 @@ class IdiomasConTextoApp:
             var.trace_add("write", lambda *a, n=nombre: self._filtrar_idiomas(n))
 
         self._filtrar_idiomas("Europa")
-        self._filtrar_idiomas("America")
-        self._filtrar_idiomas("Africa")
+        notebook.bind("<<NotebookTabChanged>>", lambda e: self._on_idiomas_tab_change(e, notebook))
+
+    def _on_idiomas_tab_change(self, event, notebook):
+        idx = notebook.index(notebook.select())
+        tabs = ["Europa", "America", "Africa"]
+        nombre = tabs[idx]
+        self._filtrar_idiomas(nombre)
 
     def _filtrar_por_continente(self, continente):
         datos = {}

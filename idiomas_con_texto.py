@@ -30,6 +30,7 @@ PAIS_CONTINENTE = {
     "az": {"nombre": "Azerbaiyano", "pais": "Azerbaiyán", "continente": "Asia"},
     "be": {"nombre": "Bielorruso", "pais": "Bielorrusia", "continente": "Europa"},
     "bg": {"nombre": "Búlgaro", "pais": "Bulgaria", "continente": "Europa"},
+    "bm": {"nombre": "Bambara", "pais": "Malí", "continente": "África"},
     "bn": {"nombre": "Bengalí", "pais": "Bangladesh", "continente": "Asia"},
     "bo": {"nombre": "Tibetano", "pais": "Tíbet", "continente": "Asia"},
     "br": {"nombre": "Bretón", "pais": "Francia", "continente": "Europa"},
@@ -48,6 +49,7 @@ PAIS_CONTINENTE = {
     "et": {"nombre": "Estonio", "pais": "Estonia", "continente": "Europa"},
     "eu": {"nombre": "Euskera", "pais": "España", "continente": "Europa"},
     "fa": {"nombre": "Persa", "pais": "Irán", "continente": "Asia"},
+    "ff": {"nombre": "Fula (Fulani)", "pais": "Nigeria", "continente": "África"},
     "fi": {"nombre": "Finés", "pais": "Finlandia", "continente": "Europa"},
     "fj": {"nombre": "Fiyiano", "pais": "Fiyi", "continente": "Oceanía"},
     "fo": {"nombre": "Feroés", "pais": "Islas Feroe", "continente": "Europa"},
@@ -81,6 +83,7 @@ PAIS_CONTINENTE = {
     "ky": {"nombre": "Kirguís", "pais": "Kirguistán", "continente": "Asia"},
     "la": {"nombre": "Latín", "pais": "Vaticano", "continente": "Europa"},
     "lb": {"nombre": "Luxemburgués", "pais": "Luxemburgo", "continente": "Europa"},
+    "ln": {"nombre": "Lingala", "pais": "República Democrática del Congo", "continente": "África"},
     "lo": {"nombre": "Lao", "pais": "Laos", "continente": "Asia"},
     "lt": {"nombre": "Lituano", "pais": "Lituania", "continente": "Europa"},
     "lv": {"nombre": "Letón", "pais": "Letonia", "continente": "Europa"},
@@ -96,7 +99,8 @@ PAIS_CONTINENTE = {
     "ne": {"nombre": "Nepalí", "pais": "Nepal", "continente": "Asia"},
     "nl": {"nombre": "Neerlandés", "pais": "Países Bajos", "continente": "Europa"},
     "no": {"nombre": "Noruego", "pais": "Noruega", "continente": "Europa"},
-    "ny": {"nombre": "Chichewa", "pais": "Malawi", "continente": "África"},
+    "ny": {"nombre": "Chewa (Nyanja)", "pais": "Malawi", "continente": "África"},
+    "om": {"nombre": "Oromo", "pais": "Etiopía", "continente": "África"},
     "or": {"nombre": "Odia", "pais": "India", "continente": "Asia"},
     "pa": {"nombre": "Punyabí", "pais": "India", "continente": "Asia"},
     "pl": {"nombre": "Polaco", "pais": "Polonia", "continente": "Europa"},
@@ -114,7 +118,7 @@ PAIS_CONTINENTE = {
     "so": {"nombre": "Somalí", "pais": "Somalia", "continente": "África"},
     "sq": {"nombre": "Albanés", "pais": "Albania", "continente": "Europa"},
     "sr": {"nombre": "Serbio", "pais": "Serbia", "continente": "Europa"},
-    "st": {"nombre": "Sesotho", "pais": "Lesoto", "continente": "África"},
+    "st": {"nombre": "Sotho", "pais": "Lesoto", "continente": "África"},
     "su": {"nombre": "Sundanés", "pais": "Indonesia", "continente": "Asia"},
     "sv": {"nombre": "Sueco", "pais": "Suecia", "continente": "Europa"},
     "sw": {"nombre": "Suajili", "pais": "Tanzania", "continente": "África"},
@@ -122,15 +126,18 @@ PAIS_CONTINENTE = {
     "te": {"nombre": "Telugu", "pais": "India", "continente": "Asia"},
     "tg": {"nombre": "Tayiko", "pais": "Tayikistán", "continente": "Asia"},
     "th": {"nombre": "Tailandés", "pais": "Tailandia", "continente": "Asia"},
+    "ti": {"nombre": "Tigriña", "pais": "Eritrea", "continente": "África"},
     "tk": {"nombre": "Turcomano", "pais": "Turkmenistán", "continente": "Asia"},
     "tl": {"nombre": "Tagalo", "pais": "Filipinas", "continente": "Asia"},
     "tr": {"nombre": "Turco", "pais": "Turquía", "continente": "Asia"},
     "tt": {"nombre": "Tártaro", "pais": "Rusia", "continente": "Europa"},
+    "tzm": {"nombre": "Tamazight (Bereber)", "pais": "Marruecos", "continente": "África"},
     "ug": {"nombre": "Uigur", "pais": "China", "continente": "Asia"},
     "uk": {"nombre": "Ucraniano", "pais": "Ucrania", "continente": "Europa"},
     "ur": {"nombre": "Urdu", "pais": "Pakistán", "continente": "Asia"},
     "uz": {"nombre": "Uzbeko", "pais": "Uzbekistán", "continente": "Asia"},
     "vi": {"nombre": "Vietnamita", "pais": "Vietnam", "continente": "Asia"},
+    "wo": {"nombre": "Wolof", "pais": "Senegal", "continente": "África"},
     "xh": {"nombre": "Xhosa", "pais": "Sudáfrica", "continente": "África"},
     "yi": {"nombre": "Yidis", "pais": "Alemania", "continente": "Europa"},
     "yo": {"nombre": "Yoruba", "pais": "Nigeria", "continente": "África"},
@@ -428,6 +435,15 @@ class IdiomasConTextoApp:
         for k, v in PAIS_CONTINENTE.items():
             if v["continente"] == continente:
                 datos[k] = v
+        if continente == "África":
+            extras = {
+                "ar_africa": {"nombre": "Árabe", "pais": "Egipto / Marruecos / Argelia / Sudán", "continente": "África"},
+                "en_africa": {"nombre": "Inglés", "pais": "Nigeria / Kenia / Sudáfrica / Ghana", "continente": "África"},
+                "es_africa": {"nombre": "Español", "pais": "Guinea Ecuatorial", "continente": "África"},
+                "fr_africa": {"nombre": "Francés", "pais": "Costa de Marfil / Senegal / Camerún / RD Congo", "continente": "África"},
+                "pt_africa": {"nombre": "Portugués", "pais": "Angola / Mozambique / Cabo Verde", "continente": "África"},
+            }
+            datos.update(extras)
         return datos
 
     def _filtrar_idiomas(self, nombre_tab):
